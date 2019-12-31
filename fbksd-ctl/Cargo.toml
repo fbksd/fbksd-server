@@ -1,0 +1,9 @@
+[package]
+name = "fbksd-ctl"
+version = "0.1.0"
+authors = ["Jonas Deyson <jonasdeyson@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+fbksd-core = {path = "../fbksd-core"}
+clap = {version = "2.32", features = ["yaml"]}

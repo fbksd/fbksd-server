@@ -1,0 +1,1 @@
+docker run --restart unless-stopped -d --name fbksd-server -v /var/opt/fbksd:/mnt/fbksd-data -v /var/lock:/var/lock --env FBKSD_DATA_ROOT=/mnt/fbksd-data --env FBKSD_WWW_USER="fbksd-ci" --env FBKSD_WWW_GROUP="fbksd-ci" --network fbksd-net fbksd-server

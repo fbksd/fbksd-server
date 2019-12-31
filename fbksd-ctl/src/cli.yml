@@ -1,0 +1,21 @@
+name: fbksd-ctl
+version: "1.0"
+author: Jonas Deyson <kbknapp@gmail.com>
+about: Server fkbsd task manager.
+
+subcommands:
+    - run-all:
+        about: run benchmark with all published techniques and update published results
+    - unpublish:
+        about: unpublish a technique
+        args:
+            - id:
+                index: 1
+                help: technique id
+                required: true
+    - update-page:
+        about: update public page with published techniques
+    - update-scenes:
+        about: re-scan the scenes directory and update the scenes cache file
+    - trim:
+        about: remove unpublishes workspaces what are older than the configured value

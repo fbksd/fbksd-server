@@ -1,0 +1,101 @@
+# Main Use Cases (user)
+
+## Commit code
+
+When the code committed to the gitlab repository, a CI task builds the executable.
+The repository must contain a valid "info.json" file, with a unique technique name.
+
+## Execute a technique
+
+The user runs a pipeline with a variable that indicates the current branch should be executed.
+
+## Visualize private results
+
+When an execution finishes, the user receives a url that can be used to visualize the results.
+This "anyone with the link can see" visualization page contains the execution results plus all published results.
+
+## Publish results
+
+When happy with the results, the user can run a pipeline with a variable that indicates the results
+in a certain slot should be published.
+After the publication, all other slots are deleted.
+
+# Main Use Cases (admin)
+
+## Add new scene
+
+When adding a new scene, all published results should run for the new scenes and updated.
+When a user decides to publish a slot, the system needs to verify if a new scene was added
+while the slot was pending. If so, it should run with the new scenes before publication.
+
+
+# Data layout
+
+<root>
+├── registry.json
+├── scenes/       (full scenes for rendering)
+├── renderers/    (full renderers for rendering)
+├── iqa/          (full iqa metrics for benchmarking)
+├── tmp/workspace    (temporary workspace used during a run)
+├── workspaces
+│   ├── denoisers
+│   │   ├── <proj id>
+│   │   │   ├── published  ->  <published workspace folder> 
+│   │   │   ├── 16fdc032-7d80-4ea9-b535-2d621509e7df/    (technique's result folder from a run)
+│   │   │   │   ├── install
+│   │   │   │   │   ├── info.json  (technique's info.json from commit that fired the run)
+│   │   │   │   │   └── <binary>   (technique's executable)
+│   │   │   │   └── results
+│   │   │   │       └── default
+│   │   │   │           ├── <scene 1>/
+│   │   │   │           └── ...
+│   │   │   └── ...
+│   │   └── ...
+│   └── samplers/ (similar to "results/denoisers")
+├── public  (this folder is totally self-contained - no links to places outside of it)
+│   ├── scenes/
+│   ├── data/
+│   ├── index.html
+│   ├── 16fdc032-7d80-4ea9-b535-2d621509e7df  (exported from a technique)
+│   │   ├── scenes  ->  ../scenes
+│   │   ├── data    -> 
+│   │   │   ├── denoisers
+│   │   │   │   ├── Box  -> ../../../data/denoisers/Box
+│   │   │   │   └── <this technique> 
+│   │   │   ├── samplers -> ../../data/samplers
+│   │   ├── index.html
+
+The results folder layout is:
+
+
+# Server tasks
+
+When a repository is created, and the first commit is made, the server can store an entry in a database mapping the repository ID with the technique name retrieved from the info.json file.
+We have to verify if the name already exists.
+
+## Build technique
+
+The build is executed automatically for every commit;               OK
+Verifies if the cmake install process obeys the expected layout;    OK
+Verifies if technique has a unique and valid id and name;           OK
+Installs technique in global workspace
+
+```
+$ fbksd-ctl verify-info
+$ <cmake build into "build">
+$ <cmake install into "tmp-workspace"> 
+$ fbksd-ctl verify-technique-install
+```
+
+## Run benchmark
+
+Create a temporary workspace with all scenes and only the technique to be run;    OK
+Run the benchmark;                                                                OK
+Copy results logs to global workspace.
+Export the results page to the private visualization location;
+Show the results link to user (with the results key).
+
+## Publish
+
+Copy the results (images and json files) from the private location with the given key to the public one;
+Update the public page cache files with the new results.

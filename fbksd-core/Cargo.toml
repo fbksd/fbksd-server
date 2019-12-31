@@ -1,0 +1,20 @@
+[package]
+name = "fbksd-core"
+version = "0.1.0"
+authors = ["Jonas Deyson <jonasdeyson@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+clap = {version = "2.32", features = ["yaml"]}
+serde = {version = "1.0", features = ["derive"]}
+serde_json = "1.0"
+serde_yaml = "0.8"
+dotenv = "0.13"
+glob = "0.3.0"
+uuid = {version = "0.7", features = ["v4"]}
+regex = "1"
+lazy_static = "1"
+log = "0.4"
+log4rs = "0.8"
+fs2 = "0.4"
+chrono = {version = "0.4", features = ["serde"]}

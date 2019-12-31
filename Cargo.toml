@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "fbksd-core",
+    "fbksd-ctl",
+    "fbksd-server",
+    "fbksd-ci"
+]
