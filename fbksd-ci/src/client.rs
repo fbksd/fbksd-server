@@ -1,6 +1,6 @@
-use crate::ci::ProjectInfo;
-use crate::msgs::{Msg, MsgResult};
-use crate::registry::Technique;
+use fbksd_core::ci::ProjectInfo;
+use fbksd_core::msgs::{Msg, MsgResult};
+use fbksd_core::registry::Technique;
 
 use lazy_static::lazy_static;
 use serde::Deserialize;

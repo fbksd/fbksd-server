@@ -8,7 +8,6 @@ use std::process::Command;
 
 use crate::paths;
 use crate::utils;
-use crate::utils::CD;
 
 #[derive(Serialize, Deserialize)]
 pub struct Scene {

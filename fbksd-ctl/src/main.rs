@@ -1,16 +1,31 @@
-#[macro_use]
-use fbksd_core::*;
+//! fbksd-ctl binary.
+//!
+//! This is a command line utility that performs administrative tasks in the server.
+
 use fbksd_core::docker;
 use fbksd_core::paths;
 use fbksd_core::registry as reg;
 use fbksd_core::utils::CD;
 use fbksd_core::utils::*;
+use fbksd_core::{try_flock};
 use fbksd_core::workspace as wp;
 use wp::Workspace;
 
 use clap::{load_yaml, App};
-use std::path::PathBuf;
+use std::fs::File;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+fn status() {
+    if !Path::new(paths::LOCK_FILE).exists() {
+        println!("Lock file does not exist.");
+        File::create(paths::LOCK_FILE).expect("Failed to create lock file");
+    }
+    match FLock::try_new() {
+        None => println!("Could not acquire lock."),
+        Some(_) => println!("Lock acquired."),
+    }
+}
 
 fn run_all() {
     //TODO: techniques can require different docker images.
@@ -85,6 +100,7 @@ fn main() {
     let yaml = load_yaml!("cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
     match matches.subcommand() {
+        ("status", Some(_)) => status(),
         ("run-all", Some(_)) => run_all(),
         ("unpublish", Some(sub)) => {
             let id: i32 = match sub.value_of("id") {

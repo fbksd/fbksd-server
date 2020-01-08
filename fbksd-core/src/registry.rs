@@ -1,5 +1,11 @@
+//! Manages the main data registry file (database).
+//!
+//! The registry file (which is just a json file for now), stores information about techniques, workspaces
+//! publication statuses and metadata.
+//! The registry file is located at `paths::registry_path()`.
+
 use crate::ci::ProjectInfo;
-use crate::config;
+use crate::system_config::SystemConfig;
 use crate::paths;
 use chrono::{DateTime, Utc};
 use log;
@@ -152,15 +158,11 @@ pub struct Registry {
 }
 
 impl Registry {
-    fn path() -> PathBuf {
-        paths::data_root().join("registry.json")
-    }
-
     /// Load the registry.
     ///
     /// If the file doesn't exist, it creates one.
     pub fn load() -> Registry {
-        let path = Self::path();
+        let path = paths::registry_path();
         if !path.exists() {
             let registry = Registry {
                 denoisers: HashMap::new(),
@@ -180,7 +182,7 @@ impl Registry {
 
     pub fn save(&self) {
         let data = serde_json::to_string_pretty(self).expect("Error serializing registry.");
-        fs::write(Self::path(), &data).expect("Error saving registry.");
+        fs::write(paths::registry_path(), &data).expect("Error saving registry.");
     }
 
     pub fn technique_type(&self, id: &str) -> Option<TechniqueType> {
@@ -269,7 +271,7 @@ impl Registry {
     /// Returns the uuid string of the new workspace.
     /// An error can occur if the technique is not registered is has its number of workspaces exceeded.
     pub fn add_workspace(&mut self, info: &ProjectInfo) -> Result<String> {
-        let max_workspaces = config::SystemConfig::load().max_num_workspaces as usize;
+        let max_workspaces = SystemConfig::load().max_num_workspaces as usize;
         let entry: &mut Entry = match self.get_entry_mut(&info.id) {
             Some((_, entry)) => entry,
             None => return Err(Error::NotRegistered),
@@ -356,7 +358,8 @@ impl Registry {
             .enumerate()
             .find(|w| w.1.uuid == uuid)
         {
-            entry.workspaces.remove(item.0);
+            let index_to_remove = item.0;
+            entry.workspaces.remove(index_to_remove);
             return Ok(());
         }
         Err(Error::Unspecified)

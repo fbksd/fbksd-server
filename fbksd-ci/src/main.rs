@@ -1,3 +1,21 @@
+//! fbksd-ci binary.
+//!
+//! The fbksd-ci binary will be called from within the ci build docker container.
+//! The working directory is the root of the cloned technique folder.
+
+mod client;
+mod cmake;
+use client::Client;
+
+use fbksd_core;
+use fbksd_core::cd;
+use fbksd_core::ci::ProjectInfo;
+use fbksd_core::config;
+use fbksd_core::flock;
+use fbksd_core::paths;
+use fbksd_core::registry::Technique;
+use fbksd_core::utils::CD;
+
 use clap::{load_yaml, App};
 use std::env;
 use std::fs;
@@ -5,20 +23,6 @@ use std::io::{BufRead, BufReader};
 use std::os::unix::fs as unixfs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-
-#[macro_use]
-use fbksd_core;
-use fbksd_core::ci::ProjectInfo;
-use fbksd_core::client::Client;
-use fbksd_core::config;
-use fbksd_core::paths;
-use fbksd_core::registry::Technique;
-use fbksd_core::utils::CD;
-use fbksd_core::utils::*;
-use fbksd_core::*;
-
-/// The fbksd-ci binary will be called from within the ci build docker container.
-/// The working directory is the root of the cloned technique folder.
 
 struct Paths {
     tmp_workspace: PathBuf,
@@ -38,11 +42,12 @@ impl Paths {
 }
 
 fn register_current_technique() {
-    let proj = ProjectInfo::load();
+    let proj = ProjectInfo::load().unwrap();
     let tech = Technique::read(PathBuf::from("info.json")).unwrap();
     Client::new().register(proj, tech);
 }
 
+/// Makes sure all files were installed inside the cmake install prefix and that the `info.json` file was installed.
 fn verify_install() {
     let prefix = env::current_dir()
         .expect("Error getting current directory")
@@ -63,7 +68,7 @@ fn verify_install() {
 }
 
 fn validate_ci() {
-    ProjectInfo::load();
+    ProjectInfo::load().unwrap();
 }
 
 fn install() {
@@ -72,23 +77,14 @@ fn install() {
     fs::create_dir("build").expect("Failed to create build directory");
     let _cd = CD::new("build");
     // configure
-    let status = Command::new("cmake")
-        .args(&[
-            "-DCMAKE_BUILD_TYPE=Release",
-            "-DCMAKE_INSTALL_PREFIX=install",
-            "../",
-        ])
-        .status()
-        .expect("Failed to execute command");
+    let status = cmake::config(cmake::BuildType::Release, "install", "../")
+        .expect("Failed to execute cmake");
     if !status.success() {
         std::process::exit(1);
     }
 
-    // install
-    let status = Command::new("make")
-        .arg("install")
-        .status()
-        .expect("Failed to execute command");
+    // build and install
+    let status = cmake::install().expect("Failed to execute cmake");
     if !status.success() {
         std::process::exit(1);
     }
@@ -97,7 +93,7 @@ fn install() {
 }
 
 fn run() {
-    let proj = ProjectInfo::load();
+    let proj = ProjectInfo::load().unwrap();
     let tech = Technique::read(PathBuf::from("info.json"))
         .expect("Failed to read info.json from project root dir");
 
@@ -174,7 +170,7 @@ fn run() {
 }
 
 fn publish() {
-    let proj = ProjectInfo::load();
+    let proj = ProjectInfo::load().unwrap();
     const FBKSD_PUBLISH: &str = "FBKSD_PUBLISH";
     let uuid = env::var(FBKSD_PUBLISH).expect(&format!("Evn var {} not defined", FBKSD_PUBLISH));
     let client = Client::new();
@@ -213,7 +209,7 @@ fn publish() {
 }
 
 fn delete_workspace() {
-    let proj = ProjectInfo::load();
+    let proj = ProjectInfo::load().unwrap();
     const FBKSD_DELETE_WORKSPACE: &str = "FBKSD_DELETE_WORKSPACE";
     let uuid = env::var(FBKSD_DELETE_WORKSPACE)
         .expect(&format!("Evn var {} not defined", FBKSD_DELETE_WORKSPACE));

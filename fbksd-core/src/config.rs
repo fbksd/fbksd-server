@@ -1,6 +1,11 @@
+//! Module for handling fbksd configurations.
+//!
+//! fbksd configurations describe how a benchmark should be executed: what scenes, techniques, and spps.
+
 use crate::paths;
 use crate::utils;
 use crate::workspace as wp;
+use crate::system_config::SystemConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -92,22 +97,8 @@ impl Config {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct SystemConfig {
-    pub max_num_workspaces: i32,
-    pub unpublished_days_limit: u64,
-    pub spps: Vec<i32>,
-    pub configs: HashMap<String, String>,
-}
-
-impl SystemConfig {
-    pub fn load() -> Self {
-        let data = fs::read_to_string(paths::config_path()).unwrap();
-        serde_json::from_str(&data).unwrap()
-    }
-}
-
 /// Generates a config for the given technique and scenes.
+///
 /// This does not uses the `fbksd` script.
 /// Binaries, and results are not copied.
 pub fn gen_config<'a, I, J, K>(path: &Path, denoisers: I, samplers: I, scenes: J)
@@ -183,6 +174,7 @@ where
 }
 
 /// Runs `fbksd config new` on the current directory.
+///
 /// Expects `fbksd` in the current PATH.
 pub fn fbksd_config() -> Result<(), ()> {
     let config = SystemConfig::load();

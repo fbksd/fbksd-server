@@ -24,10 +24,10 @@ impl Drop for CD {
 
 /// Executes a block in a new working directory.
 /// Panics if the working directory can not be set.
-#[macro_export()]
+#[macro_export]
 macro_rules! cd {
     ( $p:expr, $x:block ) => {
-        let _cd = CD::new($p);
+        let _cd = $crate::utils::CD::new($p);
         $x
     };
 }
@@ -69,10 +69,10 @@ impl Drop for FLock {
 }
 
 /// Acquires a flock and executes the block before releasing it.
-#[macro_export()]
+#[macro_export]
 macro_rules! flock {
     ( $($x:tt)* ) => {{
-        let _flock = FLock::new();
+        let _flock = $crate::utils::FLock::new();
         { $($x)* }
     }};
 }
@@ -80,16 +80,16 @@ macro_rules! flock {
 /// Tries to acquires a flock, if succeeds, executes the block before releasing it.
 ///
 /// If a second block is given, it is executed if the flock is not acquired.
-#[macro_export()]
+#[macro_export]
 macro_rules! try_flock {
     ( $x:block ) => {
-        let _flock = FLock::try_new();
+        let _flock = $crate::utils::FLock::try_new();
         if _flock.is_some() {
             $x
         }
     };
     ( $x:block, $y:block ) => {
-        let _flock = FLock::try_new();
+        let _flock = $crate::utils::FLock::try_new();
         if _flock.is_some() {
             $x
         } else {
@@ -97,7 +97,7 @@ macro_rules! try_flock {
         }
     };
     ( $x:expr, $y:expr ) => {
-        let _flock = FLock::try_new();
+        let _flock = $crate::utils::FLock::try_new();
         if _flock.is_some() {
             $x
         } else {

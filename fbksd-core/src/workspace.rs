@@ -1,5 +1,6 @@
 use crate::ci;
 use crate::config;
+use crate::system_config::SystemConfig;
 use crate::page;
 use crate::paths;
 use crate::registry as reg;
@@ -838,7 +839,7 @@ pub fn delete_unpublished_workspace(id: &str, uuid: &str) -> WPResult<()> {
 
 /// deletes all unpublished workspaces that are older than the configured limit number of days.
 pub fn trim_unpublished() {
-    let config = config::SystemConfig::load();
+    let config = SystemConfig::load();
     let reg = reg::Registry::load();
     let mut reg_new = reg.clone();
     for group in vec![reg::TechniqueType::DENOISER, reg::TechniqueType::SAMPLER] {

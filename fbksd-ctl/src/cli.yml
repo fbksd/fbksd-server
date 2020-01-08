@@ -1,9 +1,11 @@
 name: fbksd-ctl
 version: "1.0"
 author: Jonas Deyson <kbknapp@gmail.com>
-about: Server fkbsd task manager.
+about: fbksd server control command line utility
 
 subcommands:
+    - status:
+        about: prints a summary of the system status
     - run-all:
         about: run benchmark with all published techniques and update published results
     - unpublish:
@@ -18,4 +20,4 @@ subcommands:
     - update-scenes:
         about: re-scan the scenes directory and update the scenes cache file
     - trim:
-        about: remove unpublishes workspaces what are older than the configured value
+        about: remove unpublished workspaces that are older than the configured expiration time

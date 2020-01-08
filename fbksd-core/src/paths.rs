@@ -1,23 +1,26 @@
+//! All file system paths (files and directories) used throughout the system.
+
 use crate::registry::TechniqueType;
 use lazy_static::lazy_static;
 use std::env;
 use std::path::{Path, PathBuf};
 
-pub static DATA_ROOT: &str = "/home/jonas/fbksd-data";
-pub static LOCK_FILE: &str = "/var/lock/fbksd.lock";
+static REGISTRY_FILE: &str = "registry.json";
 static CONFIG_FILE: &str = "config.json";
-pub static SCENES_DIR: &str = "scenes";
-pub static IQA_DIR: &str = "iqa";
-pub static RENDERERS_DIR: &str = "renderers";
-pub static WORKSPACES_DIR: &str = "workspaces";
-pub static DENOISERS_WORKSPACES_DIR: &str = "denoisers";
-pub static SAMPLERS_WORKSPACES_DIR: &str = "samplers";
-pub static PAGE_DIR: &str = "page";
-pub static TMP_WORKSPACE_DIR: &str = "tmp/workspace";
-pub static PUBLIC_PAGE_DIR: &str = "public";
+static SCENES_DIR: &str = "scenes";
+static IQA_DIR: &str = "iqa";
+static RENDERERS_DIR: &str = "renderers";
+static WORKSPACES_DIR: &str = "workspaces";
+static DENOISERS_WORKSPACES_DIR: &str = "denoisers";
+static SAMPLERS_WORKSPACES_DIR: &str = "samplers";
+static PAGE_DIR: &str = "page";
+static TMP_WORKSPACE_DIR: &str = "tmp/workspace";
+static PUBLIC_PAGE_DIR: &str = "public";
+static TECH_PUBLISHED_DIR: &str = "published";
+
+pub static LOCK_FILE: &str = "/var/lock/fbksd.lock";
 pub static TECH_INSTALL_DIR: &str = "install";
 pub static TECH_RESULTS_DIR: &str = "results";
-pub static TECH_PUBLISHED_DIR: &str = "published";
 
 pub fn data_root() -> &'static Path {
     const VAR: &str = "FBKSD_DATA_ROOT";
@@ -30,6 +33,10 @@ pub fn data_root() -> &'static Path {
 
 pub fn config_path() -> PathBuf {
     data_root().join(&CONFIG_FILE)
+}
+
+pub fn registry_path() -> PathBuf {
+    data_root().join(&REGISTRY_FILE)
 }
 
 pub fn workspaces_path() -> &'static Path {

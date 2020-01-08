@@ -1,6 +1,12 @@
+//! fbksd-server binary.
+//!
+//! This server program continually runs on a docker container and is responsible for executing tasks requested
+//! by the fbksd-ci program that handle sensitive data.
+//! This separation prevents the fbksd-ci program (which handles untrusted code) from having direct access to the data.
+
 use fbksd_core;
 use fbksd_core::ci::ProjectInfo;
-use fbksd_core::config;
+use fbksd_core::system_config::SystemConfig;
 use fbksd_core::msgs::{Error, Msg, MsgResult};
 use fbksd_core::page;
 use fbksd_core::paths;
@@ -245,7 +251,7 @@ fn publish_public(info: ProjectInfo, uuid: String) -> MsgResult {
 fn can_run(info: ProjectInfo) -> MsgResult {
     log::info!("can run: id = {}", &info.id);
     let num = reg::Registry::load().get_unpublished_wps(&info.id).count();
-    let max = config::SystemConfig::load().max_num_workspaces as usize;
+    let max = SystemConfig::load().max_num_workspaces as usize;
     if num >= max {
         log::info!("can not run: num({}) >= max({})", num, max);
         return Err(Error::MaxWorkspacesExceeded);
