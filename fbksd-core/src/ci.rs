@@ -99,10 +99,14 @@ impl CIConfig {
     }
 }
 
+/// Project information from GitLab env variables and CI config file.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ProjectInfo {
+    /// From CI_PROJECT_ID.
     pub id: String,
+    /// From CI_COMMIT_SHORT_SHA.
     pub commit_sha: String,
+    /// From CIConfig::docker_img().
     pub docker_img: String,
 }
 

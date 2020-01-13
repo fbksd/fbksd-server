@@ -6,11 +6,11 @@
 
 use fbksd_core;
 use fbksd_core::ci::ProjectInfo;
-use fbksd_core::system_config::SystemConfig;
 use fbksd_core::msgs::{Error, Msg, MsgResult};
 use fbksd_core::page;
 use fbksd_core::paths;
 use fbksd_core::registry as reg;
+use fbksd_core::system_config::SystemConfig;
 use fbksd_core::workspace as wp;
 use reg::{Registry, Technique};
 use wp::Workspace;

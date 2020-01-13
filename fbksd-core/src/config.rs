@@ -3,9 +3,9 @@
 //! fbksd configurations describe how a benchmark should be executed: what scenes, techniques, and spps.
 
 use crate::paths;
+use crate::system_config::SystemConfig;
 use crate::utils;
 use crate::workspace as wp;
-use crate::system_config::SystemConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;

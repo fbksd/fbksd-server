@@ -1,3 +1,4 @@
+#[macro_use]
 use glob::glob;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -6,6 +7,7 @@ use std::os::unix::fs as unixfs;
 use std::path::Path;
 use std::process::Command;
 
+use crate::cd;
 use crate::paths;
 use crate::utils;
 

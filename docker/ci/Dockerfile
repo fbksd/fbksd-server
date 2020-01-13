@@ -34,7 +34,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /tmp
 RUN git clone --recurse-submodules --depth 1 https://github.com/fbksd/fbksd-server.git
 WORKDIR fbksd-server
-RUN cargo install --path fbksd-ci/
+RUN cargo install --root /usr/local --path fbksd-ci/
 
 # setup group/user
 RUN groupadd -g 992 -r fbksd-ci

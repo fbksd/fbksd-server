@@ -5,8 +5,8 @@
 //! The registry file is located at `paths::registry_path()`.
 
 use crate::ci::ProjectInfo;
-use crate::system_config::SystemConfig;
 use crate::paths;
+use crate::system_config::SystemConfig;
 use chrono::{DateTime, Utc};
 use log;
 use serde::{Deserialize, Serialize};

@@ -1,5 +1,5 @@
 //! Reads the server system configuration.
-//! 
+//!
 //! The system configuration is kept in the `CONFIG_FILE` file, and controls general policies, limits and behavior of
 //! the overall system.
 

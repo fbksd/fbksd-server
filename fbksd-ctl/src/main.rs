@@ -5,9 +5,9 @@
 use fbksd_core::docker;
 use fbksd_core::paths;
 use fbksd_core::registry as reg;
+use fbksd_core::try_flock;
 use fbksd_core::utils::CD;
 use fbksd_core::utils::*;
-use fbksd_core::{try_flock};
 use fbksd_core::workspace as wp;
 use wp::Workspace;
 
