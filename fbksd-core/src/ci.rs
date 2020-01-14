@@ -1,3 +1,5 @@
+//! Reads project info from GitLab CI configuration files (.gitlab-ci.yml) and environment variables.
+
 use crate::system_config::SystemConfig;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
@@ -53,16 +55,6 @@ struct CIConfig {
 }
 
 impl CIConfig {
-    // fn new() -> CIConfig {
-    //     CIConfig {
-    //         includes: vec![CIProjInclude {
-    //             project: String::from("fbksd/fbksd_ci_config"),
-    //             git_ref: String::from("master"),
-    //             file: String::from("/config.yml"),
-    //         }],
-    //     }
-    // }
-
     fn load() -> CIConfigResult {
         let data = fs::read_to_string(".gitlab-ci.yml");
         if data.is_err() {

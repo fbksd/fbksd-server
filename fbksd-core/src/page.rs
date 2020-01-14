@@ -1,4 +1,5 @@
-#[macro_use]
+//! Manages fbksd result pages.
+
 use glob::glob;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

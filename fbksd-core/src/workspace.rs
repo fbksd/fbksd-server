@@ -1,3 +1,5 @@
+//! Manages fbksd workspaces.
+
 use crate::ci;
 use crate::config;
 use crate::page;
