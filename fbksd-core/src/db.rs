@@ -1,10 +1,9 @@
-//! Manages the main data registry file (database).
+//! Manages the database operations.
 //!
-//! The registry file (which is just a json file for now), stores information about techniques, workspaces
-//! publication statuses and metadata.
-//! The registry file is located at `paths::registry_path()`.
+//! The database location is expected to be in the env var `DATABASE_URL`.
 
 use crate::ci::ProjectInfo;
+use crate::error::Error;
 use crate::info;
 use crate::schema::{techniques, workspaces};
 use crate::system_config::SystemConfig;
@@ -15,36 +14,8 @@ use diesel::{insert_into, Associations, Identifiable, Insertable, Queryable};
 use log;
 use serde_json;
 use std::env;
-use std::error;
-use std::fmt;
 use std::io;
 use uuid::Uuid;
-
-#[derive(Debug)]
-pub enum Error {
-    /// Technique with the same name already exists.
-    NameAlreadyExists,
-    /// No technique with the give id was found.
-    NotRegistered,
-    InvalidInfoFile,
-    AlreadyPublished,
-    MaxWorkspacesExceeded,
-    Unspecified,
-}
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use Error::*;
-        match *self {
-            NameAlreadyExists => "technique with the same name already exists".fmt(f),
-            NotRegistered => "no technique with the given id was found".fmt(f),
-            InvalidInfoFile => "invalid info.json file".fmt(f),
-            AlreadyPublished => "technique is already published".fmt(f),
-            MaxWorkspacesExceeded => "maximum number of workspaces exceeded".fmt(f),
-            Unspecified => "unspecified error".fmt(f),
-        }
-    }
-}
-impl error::Error for Error {}
 
 macro_rules! to_unspecified {
     ( $x:ty ) => {
@@ -127,46 +98,62 @@ pub struct NewWorkspace<'a> {
 
 /// Register a technique with the given id and name.
 ///
-/// Trying to register a new id with same name than other technique causes error.
 /// This method can also be used to change the current name of a technique.
 /// Multiple technique versions are not allowed (the info.json file can have only the default version).
-pub fn register(info: &ProjectInfo, tech: &info::TechniqueInfo) -> Result<()> {
-    if tech.versions.len() > 1 {
+pub fn register(info: &ProjectInfo, in_tech: &info::TechniqueInfo) -> Result<()> {
+    if in_tech.versions.len() > 1 {
         log::trace!("Multiple technique versions are not allowed in the info.json file");
         return Err(Error::InvalidInfoFile);
-    } else if tech.versions.len() == 1 && tech.versions[0].name != "default" {
+    } else if in_tech.versions.len() == 1 && in_tech.versions[0].name != "default" {
         log::trace!("Only the default version is allowed in the info.json file");
         return Err(Error::InvalidInfoFile);
     }
 
-    let tech = NewTechnique {
-        id: info.id.parse::<i32>().unwrap(),
-        technique_type: tech.technique_type as i32,
-        short_name: &tech.short_name,
-        full_name: &tech.full_name,
-        citation: &tech.citation,
-        comment: &tech.comment,
-    };
     let conn = establish_connection();
-    match insert_into(techniques::table).values(&tech).execute(&conn) {
-        Ok(_) => {
-            log::trace!("Technique {} registered.", tech.short_name);
+    // check if technique is already registered
+    match techniques::table.find(info.id).first::<Technique>(&conn) {
+        Ok(tech) => {
+            // update technique
+            diesel::update(&tech)
+                .set((
+                    techniques::dsl::short_name.eq(&in_tech.short_name),
+                    techniques::dsl::full_name.eq(&in_tech.full_name),
+                    techniques::dsl::citation.eq(&in_tech.citation),
+                    techniques::dsl::comment.eq(&in_tech.comment),
+                ))
+                .execute(&conn)?;
             return Ok(());
         }
-        Err(err) => {
-            if let diesel::result::Error::DatabaseError(kind, _) = err {
-                match kind {
-                    diesel::result::DatabaseErrorKind::UniqueViolation => {
-                        log::trace!(
-                            "Other technique with the name {} already exists.",
-                            tech.short_name
-                        );
-                        return Err(Error::NameAlreadyExists);
+        Err(_) => {
+            let tech = NewTechnique {
+                id: info.id,
+                technique_type: in_tech.technique_type as i32,
+                short_name: &in_tech.short_name,
+                full_name: &in_tech.full_name,
+                citation: &in_tech.citation,
+                comment: &in_tech.comment,
+            };
+            match insert_into(techniques::table).values(&tech).execute(&conn) {
+                Ok(_) => {
+                    log::trace!("Technique {} registered.", tech.short_name);
+                    return Ok(());
+                }
+                Err(err) => {
+                    if let diesel::result::Error::DatabaseError(kind, _) = err {
+                        match kind {
+                            diesel::result::DatabaseErrorKind::UniqueViolation => {
+                                log::trace!(
+                                    "Other technique with the name {} already exists.",
+                                    tech.short_name
+                                );
+                                return Err(Error::NameAlreadyExists);
+                            }
+                            _ => return Err(Error::Unspecified),
+                        }
                     }
-                    _ => return Err(Error::Unspecified),
+                    return Err(Error::Unspecified);
                 }
             }
-            return Err(Error::Unspecified);
         }
     }
 }
@@ -190,7 +177,7 @@ pub fn technique_type(id: i32) -> Result<info::TechniqueType> {
 /// An error can occur if the technique is not registered is has its number of workspaces exceeded.
 pub fn add_workspace(info: &ProjectInfo) -> Result<String> {
     let max_workspaces = SystemConfig::load().max_num_workspaces;
-    let id = info.id.parse::<i32>().unwrap();
+    let id = info.id;
     let conn = establish_connection();
     conn.transaction::<_, Error, _>(|| {
         match techniques::table.find(id).first::<Technique>(&conn) {
@@ -252,7 +239,7 @@ pub fn remove_workspace(id: i32, uuid: &str) -> Result<()> {
 /// Sets the status of the workspace as "finished"
 pub fn publish_workspace_private(info: &ProjectInfo, uuid: &str) -> Result<()> {
     let conn = establish_connection();
-    let id = info.id.parse::<i32>().unwrap();
+    let id = info.id;
     match techniques::table.find(id).first::<Technique>(&conn) {
         Ok(tech) => {
             let tech_workspace = Workspace::belonging_to(&tech)
@@ -276,7 +263,7 @@ pub fn publish_workspace_private(info: &ProjectInfo, uuid: &str) -> Result<()> {
 ///
 /// The workspace status must be "Finished", otherwise returns error.
 pub fn publish_workspace_public(info: &ProjectInfo, uuid: &str) -> Result<()> {
-    let id = info.id.parse::<i32>().unwrap();
+    let id = info.id;
     let conn = establish_connection();
     match techniques::table.find(id).first::<Technique>(&conn) {
         Ok(tech) => {
@@ -363,17 +350,18 @@ pub fn get_unpublished(id: i32) -> Result<std::vec::Vec<String>> {
 /// Return finished unpublished workspaces with finish_time older than the given number of days.
 pub fn get_unpub_older_than(
     group: info::TechniqueType,
-    days_limit: i64,
+    days_limit: i32,
 ) -> Result<std::vec::Vec<(i32, String)>> {
-    let oldest_allowed = (Utc::now() - Duration::days(days_limit)).naive_utc();
+    let oldest_allowed = (Utc::now() - Duration::days(days_limit as i64)).naive_utc();
     let conn = establish_connection();
     let techs = techniques::table
         .filter(techniques::dsl::technique_type.eq(group as i32))
         .load::<Technique>(&conn)?;
     let unpublished = Workspace::belonging_to(&techs)
         .filter(
-            workspaces::dsl::status.eq(WorkspaceStatus::Finished as i32)
-            .and(workspaces::dsl::finish_time.le(oldest_allowed))
+            workspaces::dsl::status
+                .eq(WorkspaceStatus::Finished as i32)
+                .and(workspaces::dsl::finish_time.le(oldest_allowed)),
         )
         .select((workspaces::dsl::technique_id, workspaces::dsl::uuid))
         .load::<(i32, String)>(&conn)?;
@@ -395,7 +383,7 @@ mod tests {
     #[should_panic]
     fn test_register() {
         let info = ProjectInfo {
-            id: String::from("12"),
+            id: 12,
             commit_sha: String::from("jhosidf"),
             docker_img: String::from("default"),
         };

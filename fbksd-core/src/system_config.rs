@@ -14,7 +14,7 @@ pub struct SystemConfig {
     /// Maximum number of workspaces allowed per project.
     pub max_num_workspaces: i32,
     /// Number of days a unpublished workspace will remain saved.
-    pub unpublished_days_limit: u64,
+    pub unpublished_days_limit: i32,
     /// List of spps used to execute benchmarks.
     pub spps: Vec<i32>,
     /// Map of docker images available. The key is the alias for an image.

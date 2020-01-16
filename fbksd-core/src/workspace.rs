@@ -2,12 +2,13 @@
 
 use crate::ci;
 use crate::config;
+use crate::db;
+use crate::error::Error;
+use crate::info;
+use crate::info::TechniqueType;
 use crate::page;
 use crate::paths;
-use crate::registry as reg;
-use crate::system_config::SystemConfig;
 use crate::utils;
-use reg::TechniqueType;
 
 use glob::glob;
 use lazy_static::lazy_static;
@@ -16,28 +17,11 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::error;
-use std::fmt;
 use std::fs;
 use std::os::unix::fs as unixfs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-#[derive(Debug)]
-pub enum Error {
-    UuidNotFound,
-    Unspecified,
-}
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use Error::*;
-        match *self {
-            UuidNotFound => "uuid not found for the given technique".fmt(f),
-            Unspecified => "unspecified error".fmt(f),
-        }
-    }
-}
-impl error::Error for Error {}
 type WPResult<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -295,8 +279,8 @@ impl Workspace {
     }
 
     pub fn load_technique(&mut self, group: &TechniqueType, proj: &ci::ProjectInfo, uuid: String) {
-        let id: i32 = proj.id.parse().unwrap();
-        let tech = Technique::read(id, paths::tech_workspace_path(group, &proj.id, &uuid)).unwrap();
+        let id: i32 = proj.id;
+        let tech = Technique::read(id, paths::tech_workspace_path(group, id, &uuid)).unwrap();
         let techs = match group {
             TechniqueType::DENOISER => &mut self.denoisers,
             TechniqueType::SAMPLER => &mut self.samplers,
@@ -483,7 +467,7 @@ impl Workspace {
 /// Returns Ok(true) if any missing scene was included.
 pub fn create_tmp_technique_workspace(
     group: &TechniqueType,
-    proj: ci::ProjectInfo,
+    proj: &ci::ProjectInfo,
     uuid: &str,
 ) -> WPResult<bool> {
     let tmp_workspace = paths::tmp_workspace_path();
@@ -492,10 +476,7 @@ pub fn create_tmp_technique_workspace(
     }
     fs::create_dir_all(&tmp_workspace).expect("Failed to create temporary workspace");
 
-    let tech = match Technique::read(
-        proj.id.parse().unwrap(),
-        paths::tech_workspace_path(group, &proj.id, &uuid),
-    ) {
+    let tech = match Technique::read(proj.id, paths::tech_workspace_path(group, proj.id, &uuid)) {
         Ok(tech) => tech,
         Err(err) => {
             return Err(err);
@@ -532,8 +513,8 @@ pub fn create_tmp_technique_workspace(
     }
 
     // copy binaries
-    let src = paths::tech_install_path(group, &proj.id, &uuid).join("");
-    let dest = tmp_workspace.join(group.as_str()).join(&proj.id);
+    let src = paths::tech_install_path(group, proj.id, &uuid).join("");
+    let dest = tmp_workspace.join(group.as_str()).join(proj.id.to_string());
     let status = Command::new("rsync")
         .args(&["-a", src.to_str().unwrap(), dest.to_str().unwrap()])
         .status();
@@ -573,15 +554,15 @@ pub fn create_tmp_workspace(include_published: bool) {
 
     // include published techniques
     if include_published {
-        let reg = reg::Registry::load();
-        for group in vec![reg::TechniqueType::DENOISER, reg::TechniqueType::SAMPLER] {
+        for group in vec![info::TechniqueType::DENOISER, info::TechniqueType::SAMPLER] {
             fs::create_dir_all(PathBuf::from("results/.current").join(group.as_str())).unwrap();
-            let published = reg.get_published(&group);
-            for p in published {
-                let base = paths::tech_workspace_path(&group, &p.0, &p.1);
+            //TODO: remove this database access.
+            let published = db::get_published(group).unwrap();
+            for p in published.iter() {
+                let base = paths::tech_workspace_path(&group, p.0, &p.1);
                 // binaries
                 let src = base.join(paths::TECH_INSTALL_DIR).join("");
-                let dest = Path::new(group.as_str()).join(&p.0);
+                let dest = Path::new(group.as_str()).join(p.0.to_string());
                 let status = Command::new("rsync")
                     .args(&["-a", src.to_str().unwrap(), dest.to_str().unwrap()])
                     .status();
@@ -590,8 +571,8 @@ pub fn create_tmp_workspace(include_published: bool) {
                 }
                 // results
                 let src = base.join("results/");
-                let tech = reg::Technique::read(
-                    paths::tech_install_path(&group, &p.0, &p.1).join("info.json"),
+                let tech = info::TechniqueInfo::read(
+                    paths::tech_install_path(&group, p.0, &p.1).join("info.json"),
                 )
                 .unwrap();
                 let dest = PathBuf::from("results/.current/")
@@ -616,13 +597,18 @@ pub fn create_tmp_workspace(include_published: bool) {
 /// Save technique data from a temporary workspace to the permanent location.
 ///
 /// Data can be copied or moved, and can include the executable or only the results.
-pub fn save_technique_tmp_workspace(id: &str, uuid: &str, include_install: bool, mv: bool) {
+pub fn save_technique_tmp_workspace(
+    group: info::TechniqueType,
+    id: i32,
+    uuid: &str,
+    include_install: bool,
+    mv: bool,
+) {
     let tmp_workspace = paths::tmp_workspace_path();
-    let group = reg::Registry::load().technique_type(id).unwrap();
-    let tech = reg::Technique::read(
+    let tech = info::TechniqueInfo::read(
         tmp_workspace
             .join(group.as_str())
-            .join(&id)
+            .join(id.to_string())
             .join("info.json"),
     )
     .unwrap();
@@ -631,7 +617,7 @@ pub fn save_technique_tmp_workspace(id: &str, uuid: &str, include_install: bool,
         .join(group.as_str())
         .join(&tech.short_name)
         .join("");
-    let dest = paths::tech_results_path(&group, &id, &uuid).join("");
+    let dest = paths::tech_results_path(&group, id, &uuid).join("");
     if mv {
         let status = Command::new("mv").args(&[&src, &dest]).status();
         if status.is_err() || !status.unwrap().success() {
@@ -652,8 +638,11 @@ pub fn save_technique_tmp_workspace(id: &str, uuid: &str, include_install: bool,
     }
 
     if include_install {
-        let src = tmp_workspace.join(group.as_str()).join(&id).join("");
-        let dest = paths::tech_install_path(&group, &id, &uuid).join("");
+        let src = tmp_workspace
+            .join(group.as_str())
+            .join(id.to_string())
+            .join("");
+        let dest = paths::tech_install_path(&group, id, &uuid).join("");
         if mv {
             let status = Command::new("mv").args(&[&src, &dest]).status();
             if status.is_err() || !status.unwrap().success() {
@@ -680,20 +669,20 @@ pub fn save_technique_tmp_workspace(id: &str, uuid: &str, include_install: bool,
 /// Args:
 ///  - include_install: also saves the techniques install ("<group>/*") folder
 ///  - mv: move instead of copy
-pub fn save_tmp_workspace(include_install: bool, mv: bool) {
-    let tmp_workspace = paths::tmp_workspace_path();
-    if !tmp_workspace.is_dir() {
-        return;
-    }
-    let _cd = utils::CD::new(&tmp_workspace);
-    let reg = reg::Registry::load();
-    for group in vec![reg::TechniqueType::DENOISER, reg::TechniqueType::SAMPLER] {
-        let published = reg.get_published(&group);
-        for p in published {
-            save_technique_tmp_workspace(&p.0, &p.1, include_install, mv);
-        }
-    }
-}
+// pub fn save_tmp_workspace(include_install: bool, mv: bool) {
+//     let tmp_workspace = paths::tmp_workspace_path();
+//     if !tmp_workspace.is_dir() {
+//         return;
+//     }
+//     let _cd = utils::CD::new(&tmp_workspace);
+//     let reg = reg::Registry::load();
+//     for group in vec![info::TechniqueType::DENOISER, info::TechniqueType::SAMPLER] {
+//         let published = reg.get_published(&group);
+//         for p in published {
+//             save_technique_tmp_workspace(&p.0, &p.1, include_install, mv);
+//         }
+//     }
+// }
 
 /// Export result images from a specific technique slot.
 ///
@@ -701,7 +690,7 @@ pub fn save_tmp_workspace(include_install: bool, mv: bool) {
 ///  - src: `workspaces/<group>/<id>/<uuid>/results` directory
 ///  - dest: `<page>/data/<group>/<tech name>` directory
 ///  - ignore_existing: avoid transferring files that already exist in the destination
-pub fn export_technique_images(src: &Path, dest: &Path, ignore_existing: bool) -> bool {
+pub fn export_technique_images(src: &Path, dest: &Path, ignore_existing: bool) -> WPResult<()> {
     let src = src.join("");
     let dest = dest.join("");
     let mut args = vec![
@@ -719,31 +708,30 @@ pub fn export_technique_images(src: &Path, dest: &Path, ignore_existing: bool) -
     }
     args.push(src.to_str().unwrap());
     args.push(dest.to_str().unwrap());
-    let status = Command::new("rsync").args(&args).status();
-    if status.is_err() || !status.unwrap().success() {
-        return false;
+    let status = Command::new("rsync").args(&args).status()?;
+    if status.success() {
+        return Ok(());
     }
-    return true;
+    return Err(Error::Unspecified);
 }
 
 /// Export result images from all published techniques to the public page.
 ///
 /// Old published images are overwritten.
 pub fn export_images() {
-    let reg = reg::Registry::load();
-    for group in vec![reg::TechniqueType::DENOISER, reg::TechniqueType::SAMPLER] {
-        let published = reg.get_published(&group);
+    for group in vec![info::TechniqueType::DENOISER, info::TechniqueType::SAMPLER] {
+        let published = db::get_published(group).unwrap();
         for p in published {
-            let src = paths::tech_results_path(&group, &p.0, &p.1);
-            let tech = reg::Technique::read(
-                paths::tech_install_path(&group, &p.0, &p.1).join("info.json"),
+            let src = paths::tech_results_path(&group, p.0, &p.1);
+            let tech = info::TechniqueInfo::read(
+                paths::tech_install_path(&group, p.0, &p.1).join("info.json"),
             )
             .unwrap();
             let dest = paths::public_page_path()
                 .join("data")
                 .join(group.as_str())
                 .join(&tech.short_name);
-            export_technique_images(&src, &dest, false);
+            export_technique_images(&src, &dest, false).unwrap();
         }
     }
 }
@@ -818,87 +806,80 @@ pub fn update_scenes() {
 }
 
 /// Deletes a technique's unpublished workspace (including results page).
-pub fn delete_unpublished_workspace(id: &str, uuid: &str) -> WPResult<()> {
-    let reg = reg::Registry::load();
-    match reg.get_unpublished_wps(id).find(|i| i.as_str() == uuid) {
-        Some(uuid) => {
-            let mut reg = reg::Registry::load();
-            let group = reg.technique_type(id).unwrap();
-            if reg.remove_workspace(id, &uuid).is_ok() {
-                let mut ok =
-                    fs::remove_dir_all(paths::tech_workspace_path(&group, &id, &uuid)).is_ok();
-                ok = ok && fs::remove_dir_all(paths::public_page_path().join(&uuid)).is_ok();
-                if ok {
-                    reg.save();
-                    return Ok(());
-                }
-            }
-        }
-        None => {}
-    };
-    Err(Error::Unspecified)
-}
+// pub fn delete_unpublished_workspace(id: &str, uuid: &str) -> WPResult<()> {
+//     match reg.get_unpublished_wps(id).find(|i| i.as_str() == uuid) {
+//         Some(uuid) => {
+//             let mut reg = reg::Registry::load();
+//             let group = reg.technique_type(id).unwrap();
+//             if reg.remove_workspace(id, &uuid).is_ok() {
+//                 let mut ok =
+//                     fs::remove_dir_all(paths::tech_workspace_path(&group, &id, &uuid)).is_ok();
+//                 ok = ok && fs::remove_dir_all(paths::public_page_path().join(&uuid)).is_ok();
+//                 if ok {
+//                     reg.save();
+//                     return Ok(());
+//                 }
+//             }
+//         }
+//         None => {}
+//     };
+//     Err(Error::Unspecified)
+// }
 
 /// deletes all unpublished workspaces that are older than the configured limit number of days.
-pub fn trim_unpublished() {
-    let config = SystemConfig::load();
-    let reg = reg::Registry::load();
-    let mut reg_new = reg.clone();
-    for group in vec![reg::TechniqueType::DENOISER, reg::TechniqueType::SAMPLER] {
-        let to_delete = reg.get_unpub_older_than(&group, config.unpublished_days_limit);
-        for item in to_delete {
-            fs::remove_dir_all(paths::tech_workspace_path(&group, &item.0, &item.1))
-                .expect("failed to remove workspace");
-            fs::remove_dir_all(paths::public_page_path().join(&item.1))
-                .expect("failed to remove private page");
-            reg_new.remove_workspace(&item.0, &item.1).unwrap();
-            log::info!(
-                "old workspace deleted: id = {}, uuid = {}",
-                &item.0,
-                &item.1
-            );
-        }
-    }
-    reg_new.save();
-}
+// pub fn trim_unpublished() {
+//     let config = SystemConfig::load();
+//     let reg = reg::Registry::load();
+//     let mut reg_new = reg.clone();
+//     for group in vec![reg::TechniqueType::DENOISER, reg::TechniqueType::SAMPLER] {
+//         let to_delete = reg.get_unpub_older_than(&group, config.unpublished_days_limit);
+//         for item in to_delete {
+//             fs::remove_dir_all(paths::tech_workspace_path(&group, &item.0, &item.1))
+//                 .expect("failed to remove workspace");
+//             fs::remove_dir_all(paths::public_page_path().join(&item.1))
+//                 .expect("failed to remove private page");
+//             reg_new.remove_workspace(&item.0, &item.1).unwrap();
+//             log::info!(
+//                 "old workspace deleted: id = {}, uuid = {}",
+//                 &item.0,
+//                 &item.1
+//             );
+//         }
+//     }
+//     reg_new.save();
+// }
 
 /// Unpublishes a technique, setting its workspace as "Finished".
-pub fn unpublish_technique(id: i32) -> WPResult<()> {
-    let id = id.to_string();
-    let mut reg = reg::Registry::load();
-    if let Ok((group, uuid)) = reg.unpublish_workspace(&id) {
-        // delete "published" link
-        if fs::remove_file(paths::tech_published_wp_path(&group, &id)).is_err() {
-            return Err(Error::Unspecified);
-        }
-        // delete technique's results from the public page
-        let tech = match reg::Technique::read(
-            paths::tech_install_path(&group, &id, uuid).join("info.json"),
-        ) {
-            Ok(tech) => tech,
-            _ => {
-                eprintln!("failed to load technique");
-                return Err(Error::Unspecified);
-            }
-        };
-        if fs::remove_dir_all(
-            paths::public_page_path()
-                .join("data")
-                .join(group.as_str())
-                .join(&tech.short_name),
-        )
-        .is_err()
-        {
-            eprintln!("failed to remove public data");
-            return Err(Error::Unspecified);
-        }
-        reg.save();
-        // update public page data
-        let wp = Workspace::load();
-        wp.export_page(paths::public_page_path());
-        return Ok(());
+pub fn unpublish_technique(group: info::TechniqueType, id: i32, uuid: &str) -> WPResult<()> {
+    // delete "published" link
+    if fs::remove_file(paths::tech_published_wp_path(&group, id)).is_err() {
+        return Err(Error::Unspecified);
     }
-    Err(Error::Unspecified)
+    // delete technique's results from the public page
+    let tech = match info::TechniqueInfo::read(
+        paths::tech_install_path(&group, id, &uuid).join("info.json"),
+    ) {
+        Ok(tech) => tech,
+        _ => {
+            eprintln!("failed to load technique");
+            return Err(Error::Unspecified);
+        }
+    };
+    if fs::remove_dir_all(
+        paths::public_page_path()
+            .join("data")
+            .join(group.as_str())
+            .join(&tech.short_name),
+    )
+    .is_err()
+    {
+        eprintln!("failed to remove public data");
+        return Err(Error::Unspecified);
+    }
+    // update public page data
+    let wp = Workspace::load();
+    wp.export_page(paths::public_page_path());
+    return Ok(());
 }
 
 fn www_ownership() -> (&'static String, &'static String) {

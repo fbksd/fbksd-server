@@ -1,35 +1,10 @@
+//! Handle technique's `info.json` file.
+
+use crate::error::Error;
+
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::PathBuf;
-use std::{error, fmt, fs, io};
-
-#[derive(Debug)]
-pub enum Error {
-    InvalidInfoFile,
-    Unspecified,
-}
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use Error::*;
-        match *self {
-            InvalidInfoFile => "invalid info.json file".fmt(f),
-            Unspecified => "unspecified error".fmt(f),
-        }
-    }
-}
-impl error::Error for Error {}
-
-macro_rules! to_unspecified {
-    ( $x:ty ) => {
-        impl From<$x> for Error {
-            fn from(_: $x) -> Self {
-                Error::Unspecified
-            }
-        }
-    };
-}
-to_unspecified!(io::Error);
-to_unspecified!(serde_json::error::Error);
-type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum TechniqueType {
@@ -65,7 +40,7 @@ pub struct TechniqueInfo {
 
 impl TechniqueInfo {
     /// Read a info.json file.
-    pub fn read(path: PathBuf) -> Result<TechniqueInfo> {
+    pub fn read(path: PathBuf) -> Result<TechniqueInfo, Error> {
         let data = fs::read_to_string(path)?;
         let tech: TechniqueInfo = serde_json::from_str(&data)?;
         Ok(tech)

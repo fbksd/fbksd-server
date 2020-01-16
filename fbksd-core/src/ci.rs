@@ -95,7 +95,7 @@ impl CIConfig {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ProjectInfo {
     /// From CI_PROJECT_ID.
-    pub id: String,
+    pub id: i32,
     /// From CI_COMMIT_SHORT_SHA.
     pub commit_sha: String,
     /// From CIConfig::docker_img().
@@ -109,7 +109,8 @@ impl ProjectInfo {
         if id.is_err() {
             return Err(CIError::CIConfigNotFound);
         }
-        let id = id.unwrap();
+        // TODO: remove the unwraps.
+        let id = id.unwrap().parse::<i32>().unwrap();
 
         const CI_COMMIT_SHORT_SHA: &str = "CI_COMMIT_SHORT_SHA";
         let commit_sha = env::var(CI_COMMIT_SHORT_SHA);

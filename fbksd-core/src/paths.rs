@@ -1,6 +1,6 @@
 //! All file system paths (files and directories) used throughout the system.
 
-use crate::registry::TechniqueType;
+use crate::info::TechniqueType;
 use lazy_static::lazy_static;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -102,33 +102,33 @@ pub fn samplers_workspaces_path() -> &'static Path {
     &PATH
 }
 
-pub fn tech_data_path(group: &TechniqueType, id: &str) -> PathBuf {
+pub fn tech_data_path(group: &TechniqueType, id: i32) -> PathBuf {
     match group {
-        TechniqueType::DENOISER => denoisers_workspaces_path().join(&id),
-        TechniqueType::SAMPLER => samplers_workspaces_path().join(&id),
+        TechniqueType::DENOISER => denoisers_workspaces_path().join(id.to_string()),
+        TechniqueType::SAMPLER => samplers_workspaces_path().join(id.to_string()),
     }
 }
 
-pub fn tech_workspace_path(group: &TechniqueType, id: &str, uuid: &str) -> PathBuf {
-    tech_data_path(group, &id).join(&uuid)
+pub fn tech_workspace_path(group: &TechniqueType, id: i32, uuid: &str) -> PathBuf {
+    tech_data_path(group, id).join(&uuid)
 }
 
-pub fn tech_install_path(group: &TechniqueType, id: &str, uuid: &str) -> PathBuf {
-    tech_workspace_path(group, &id, &uuid).join(&TECH_INSTALL_DIR)
+pub fn tech_install_path(group: &TechniqueType, id: i32, uuid: &str) -> PathBuf {
+    tech_workspace_path(group, id, &uuid).join(&TECH_INSTALL_DIR)
 }
 
-pub fn tech_results_path(group: &TechniqueType, id: &str, uuid: &str) -> PathBuf {
-    tech_workspace_path(group, &id, &uuid).join(&TECH_RESULTS_DIR)
+pub fn tech_results_path(group: &TechniqueType, id: i32, uuid: &str) -> PathBuf {
+    tech_workspace_path(group, id, &uuid).join(&TECH_RESULTS_DIR)
 }
 
-pub fn tech_published_wp_path(group: &TechniqueType, id: &str) -> PathBuf {
-    tech_workspace_path(group, &id, &TECH_PUBLISHED_DIR)
+pub fn tech_published_wp_path(group: &TechniqueType, id: i32) -> PathBuf {
+    tech_workspace_path(group, id, &TECH_PUBLISHED_DIR)
 }
 
-pub fn tech_published_install_path(group: &TechniqueType, id: &str) -> PathBuf {
-    tech_published_wp_path(group, &id).join(&TECH_INSTALL_DIR)
+pub fn tech_published_install_path(group: &TechniqueType, id: i32) -> PathBuf {
+    tech_published_wp_path(group, id).join(&TECH_INSTALL_DIR)
 }
 
-pub fn tech_published_results_path(group: &TechniqueType, id: &str) -> PathBuf {
-    tech_published_wp_path(group, &id).join(&TECH_RESULTS_DIR)
+pub fn tech_published_results_path(group: &TechniqueType, id: i32) -> PathBuf {
+    tech_published_wp_path(group, id).join(&TECH_RESULTS_DIR)
 }

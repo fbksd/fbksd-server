@@ -2,9 +2,11 @@
 //!
 //! This is a command line utility that performs administrative tasks in the server.
 
+use fbksd_core;
+use fbksd_core::db;
 use fbksd_core::docker;
+use fbksd_core::info::{TechniqueInfo, TechniqueType};
 use fbksd_core::paths;
-use fbksd_core::registry as reg;
 use fbksd_core::try_flock;
 use fbksd_core::utils::CD;
 use fbksd_core::utils::*;
@@ -40,13 +42,12 @@ fn run_all() {
     docker::run("fbksd", &["results", "compute"]).unwrap();
 
     println!("saving results...");
-    let reg = reg::Registry::load();
-    for group in vec![reg::TechniqueType::DENOISER, reg::TechniqueType::SAMPLER] {
-        let published = reg.get_published(&group);
+    for group in vec![TechniqueType::DENOISER, TechniqueType::SAMPLER] {
+        let published = db::get_published(group).unwrap();
         for p in published {
-            let base = paths::tech_workspace_path(&group, &p.0, &p.1);
+            let base = paths::tech_workspace_path(&group, p.0, &p.1);
             let tech =
-                reg::Technique::read(base.join(paths::TECH_INSTALL_DIR).join("info.json")).unwrap();
+                TechniqueInfo::read(base.join(paths::TECH_INSTALL_DIR).join("info.json")).unwrap();
             let src = PathBuf::from("results/.current")
                 .join(group.as_str())
                 .join(&tech.short_name)
@@ -82,7 +83,7 @@ fn update_page() {
 }
 
 fn unpublish(id: i32) {
-    wp::unpublish_technique(id).expect("Failed to unpublish.");
+    fbksd_core::unpublish_technique(id).expect("Failed to unpublish.");
 }
 
 fn update_scenes() {
@@ -93,7 +94,10 @@ fn update_scenes() {
 }
 
 fn trim() {
-    try_flock!(wp::trim_unpublished(), println!("failed to acquire lock"));
+    try_flock!(
+        fbksd_core::trim_unpublished(),
+        println!("failed to acquire lock")
+    );
 }
 
 fn main() {

@@ -12,8 +12,8 @@ use fbksd_core::cd;
 use fbksd_core::ci::ProjectInfo;
 use fbksd_core::config;
 use fbksd_core::flock;
+use fbksd_core::info::TechniqueInfo;
 use fbksd_core::paths;
-use fbksd_core::registry::Technique;
 use fbksd_core::utils::CD;
 
 use clap::{load_yaml, App};
@@ -43,7 +43,7 @@ impl Paths {
 
 fn register_current_technique() {
     let proj = ProjectInfo::load().unwrap();
-    let tech = Technique::read(PathBuf::from("info.json")).unwrap();
+    let tech = TechniqueInfo::read(PathBuf::from("info.json")).unwrap();
     Client::new().register(proj, tech);
 }
 
@@ -64,7 +64,7 @@ fn verify_install() {
         eprintln!("Something was installed in the wrong place");
         std::process::exit(1);
     }
-    Technique::read(prefix.join("info.json")).expect("Failed to open info.json file");
+    TechniqueInfo::read(prefix.join("info.json")).expect("Failed to open info.json file");
 }
 
 fn validate_ci() {
@@ -94,7 +94,7 @@ fn install() {
 
 fn run() {
     let proj = ProjectInfo::load().unwrap();
-    let tech = Technique::read(PathBuf::from("info.json"))
+    let tech = TechniqueInfo::read(PathBuf::from("info.json"))
         .expect("Failed to read info.json from project root dir");
 
     let client = Client::new();

@@ -1,6 +1,6 @@
 use fbksd_core::ci::ProjectInfo;
+use fbksd_core::info::TechniqueInfo;
 use fbksd_core::msgs::{Msg, MsgResult};
-use fbksd_core::registry::Technique;
 
 use lazy_static::lazy_static;
 use serde::Deserialize;
@@ -34,7 +34,7 @@ impl Client {
     /// Trying to register a new id with a name already used by other technique causes error.
     /// This method can also be used to change the current name of a technique.
     /// Multiple technique versions are not allowed (the info.json file can have only the default version).
-    pub fn register(&self, proj: ProjectInfo, tech: Technique) {
+    pub fn register(&self, proj: ProjectInfo, tech: TechniqueInfo) {
         serde_json::to_writer(&self.stream, &Msg::Register(proj, tech))
             .expect("Failed to send message to server");
         let mut de = serde_json::Deserializer::from_reader(&self.stream);
@@ -60,7 +60,7 @@ impl Client {
     /// Save results from the temporary workspace and returns the key (uuid).
     ///
     /// They key is used to publish the results.
-    pub fn save_results(&self, info: ProjectInfo, tech: Technique) -> String {
+    pub fn save_results(&self, info: ProjectInfo, tech: TechniqueInfo) -> String {
         serde_json::to_writer(&self.stream, &Msg::SaveResults(info, tech))
             .expect("Failed to send message to server");
         let mut de = serde_json::Deserializer::from_reader(&self.stream);
