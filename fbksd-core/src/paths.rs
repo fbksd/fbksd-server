@@ -1,12 +1,45 @@
 //! All file system paths (files and directories) used throughout the system.
+//!
+//! The hierarchy follows this pattern:
+//! ```txt
+//! fbksd-data/
+//! ├── registry.db
+//! ├── scenes/       (full scenes for rendering)
+//! ├── renderers/    (full renderers for rendering)
+//! ├── iqa/          (full iqa metrics for benchmarking)
+//! ├── workspaces
+//! │   ├── denoisers
+//! │   │   ├── <proj id>
+//! │   │   │   ├── published  ->  <published workspace folder>
+//! │   │   │   ├── 16fdc032-7d80-4ea9-b535-2d621509e7df/    (technique's result folder from a run)
+//! │   │   │   │   ├── info.json  (technique's info.json from commit that fired the run)
+//! │   │   │   │   └── default
+//! │   │   │   │       ├── <scene 1>/
+//! │   │   │   │       └── ...
+//! │   │   │   └── ...
+//! │   │   └── ...
+//! │   └── samplers/ (similar to "results/denoisers")
+//! ├── public  (this folder is totally self-contained - no links to places outside of it)
+//! │   ├── scenes/
+//! │   ├── data/
+//! │   ├── index.html
+//! │   ├── 16fdc032-7d80-4ea9-b535-2d621509e7df  (exported from a technique)
+//! │   │   ├── scenes  ->  ../scenes
+//! │   │   ├── data    ->
+//! │   │   │   ├── denoisers
+//! │   │   │   │   ├── Box  -> ../../../data/denoisers/Box
+//! │   │   │   │   └── <this technique>
+//! │   │   │   ├── samplers -> ../../data/samplers
+//! │   │   ├── index.html
+//! ```
 
 use crate::info::TechniqueType;
 use lazy_static::lazy_static;
 use std::env;
 use std::path::{Path, PathBuf};
 
-static REGISTRY_FILE: &str = "registry.json";
 static CONFIG_FILE: &str = "config.json";
+static DATABASE_FILE: &str = "server.db";
 static SCENES_DIR: &str = "scenes";
 static IQA_DIR: &str = "iqa";
 static RENDERERS_DIR: &str = "renderers";
@@ -35,8 +68,8 @@ pub fn config_path() -> PathBuf {
     data_root().join(&CONFIG_FILE)
 }
 
-pub fn registry_path() -> PathBuf {
-    data_root().join(&REGISTRY_FILE)
+pub fn database_path() -> PathBuf {
+    data_root().join(&DATABASE_FILE)
 }
 
 pub fn workspaces_path() -> &'static Path {
@@ -102,33 +135,37 @@ pub fn samplers_workspaces_path() -> &'static Path {
     &PATH
 }
 
-pub fn tech_data_path(group: &TechniqueType, id: i32) -> PathBuf {
+pub fn tech_data_path(group: TechniqueType, id: i32) -> PathBuf {
     match group {
         TechniqueType::DENOISER => denoisers_workspaces_path().join(id.to_string()),
         TechniqueType::SAMPLER => samplers_workspaces_path().join(id.to_string()),
     }
 }
 
-pub fn tech_workspace_path(group: &TechniqueType, id: i32, uuid: &str) -> PathBuf {
+pub fn tech_project_src_path(group: TechniqueType, id: i32) -> PathBuf {
+    return tech_data_path(group, id).join("src");
+}
+
+pub fn tech_workspace_path(group: TechniqueType, id: i32, uuid: &str) -> PathBuf {
     tech_data_path(group, id).join(&uuid)
 }
 
-pub fn tech_install_path(group: &TechniqueType, id: i32, uuid: &str) -> PathBuf {
+pub fn tech_install_path(group: TechniqueType, id: i32, uuid: &str) -> PathBuf {
     tech_workspace_path(group, id, &uuid).join(&TECH_INSTALL_DIR)
 }
 
-pub fn tech_results_path(group: &TechniqueType, id: i32, uuid: &str) -> PathBuf {
+pub fn tech_results_path(group: TechniqueType, id: i32, uuid: &str) -> PathBuf {
     tech_workspace_path(group, id, &uuid).join(&TECH_RESULTS_DIR)
 }
 
-pub fn tech_published_wp_path(group: &TechniqueType, id: i32) -> PathBuf {
+pub fn tech_published_wp_path(group: TechniqueType, id: i32) -> PathBuf {
     tech_workspace_path(group, id, &TECH_PUBLISHED_DIR)
 }
 
-pub fn tech_published_install_path(group: &TechniqueType, id: i32) -> PathBuf {
+pub fn tech_published_install_path(group: TechniqueType, id: i32) -> PathBuf {
     tech_published_wp_path(group, id).join(&TECH_INSTALL_DIR)
 }
 
-pub fn tech_published_results_path(group: &TechniqueType, id: i32) -> PathBuf {
+pub fn tech_published_results_path(group: TechniqueType, id: i32) -> PathBuf {
     tech_published_wp_path(group, id).join(&TECH_RESULTS_DIR)
 }

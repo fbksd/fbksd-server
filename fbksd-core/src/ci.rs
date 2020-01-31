@@ -98,6 +98,8 @@ pub struct ProjectInfo {
     pub id: i32,
     /// From CI_COMMIT_SHORT_SHA.
     pub commit_sha: String,
+    /// From GITLAB_USER_EMAIL
+    pub user_email: String,
     /// From CIConfig::docker_img().
     pub docker_img: String,
 }
@@ -119,10 +121,18 @@ impl ProjectInfo {
         }
         let commit_sha = commit_sha.unwrap();
 
+        const GITLAB_USER_EMAIL: &str = "GITLAB_USER_EMAIL";
+        let user_email = env::var(GITLAB_USER_EMAIL);
+        if user_email.is_err() {
+            return Err(CIError::CIConfigNotFound);
+        }
+        let user_email = user_email.unwrap();
+
         let ci_config = CIConfig::load()?;
         Ok(ProjectInfo {
             id,
             commit_sha,
+            user_email,
             docker_img: String::from(ci_config.docker_img()),
         })
     }

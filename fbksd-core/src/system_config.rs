@@ -19,6 +19,13 @@ pub struct SystemConfig {
     pub spps: Vec<i32>,
     /// Map of docker images available. The key is the alias for an image.
     pub configs: HashMap<String, String>,
+    pub mailer_smtp_domain: String,
+    pub mailer_email_user: String,
+    pub mailer_email_password: String,
+    /// Polling rate for checking email tasks (in seconds).
+    pub mailer_polling_rate: i32,
+    /// Timeout for connection with SMTP server (in seconds).
+    pub mailer_timeout: i32,
 }
 
 impl SystemConfig {

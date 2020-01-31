@@ -24,9 +24,9 @@ use std::os::unix::fs as unixfs;
 use std::process::{Command, Stdio};
 
 /// Register/update a technique.
-/// 
+///
 /// Only short name, full name, citation, and comment are updated.
-pub fn register(info: ci::ProjectInfo, tech: info::TechniqueInfo) -> Result<(), Error> {
+pub fn register(info: &ci::ProjectInfo, tech: &info::TechniqueInfo) -> Result<(), Error> {
     log::info!("register: id = {}, name = {}", &info.id, &tech.short_name);
     if let Err(_) = db::register(&info, &tech) {
         log::warn!("failed to register technique");
@@ -46,7 +46,7 @@ pub fn save_results(proj: ci::ProjectInfo, tech: info::TechniqueInfo) -> Result<
     );
     let uuid = db::add_workspace(&proj)?;
     let group = db::technique_type(proj.id)?;
-    let base = paths::tech_workspace_path(&group, proj.id, &uuid);
+    let base = paths::tech_workspace_path(group, proj.id, &uuid);
     if fs::create_dir_all(&base.join(paths::TECH_RESULTS_DIR)).is_err() {
         log::error!("failed to create workspace results folder");
         return Err(Error::Unspecified);
@@ -89,7 +89,7 @@ pub fn save_results(proj: ci::ProjectInfo, tech: info::TechniqueInfo) -> Result<
 pub fn publish_private(proj: ci::ProjectInfo, uuid: String) -> Result<(), Error> {
     log::info!("publish private: id = {}, uuid = {}", &proj.id, &uuid);
     let group = db::technique_type(proj.id).unwrap();
-    let base_path = paths::tech_workspace_path(&group, proj.id, &uuid);
+    let base_path = paths::tech_workspace_path(group, proj.id, &uuid);
     let install_path = base_path.join(paths::TECH_INSTALL_DIR);
     let tech = info::TechniqueInfo::read(install_path.join("info.json"));
     if tech.is_err() {
@@ -104,7 +104,7 @@ pub fn publish_private(proj: ci::ProjectInfo, uuid: String) -> Result<(), Error>
     }
 
     let mut wp = Workspace::load();
-    wp.load_technique(&group, &proj, uuid.to_string());
+    wp.load_technique(group, &proj, uuid.to_string());
     wp.export_page(&private_dir);
     // copy result images to unpublished dir
     let src = base_path.join(paths::TECH_RESULTS_DIR);
@@ -127,14 +127,14 @@ pub fn publish_public(info: ci::ProjectInfo, uuid: String) -> Result<(), Error> 
     let private_page = public_page.join(&uuid);
     let mut wp = Workspace::load();
     let group = db::technique_type(info.id)?;
-    wp.load_technique(&group, &info, uuid.to_string());
+    wp.load_technique(group, &info, uuid.to_string());
     wp.export_page(&public_page);
 
     // TODO: remove unwraps/expects
 
     // create link to published data
-    let base = paths::tech_workspace_path(&group, info.id, &uuid);
-    let link_path = paths::tech_published_wp_path(&group, info.id);
+    let base = paths::tech_workspace_path(group, info.id, &uuid);
+    let link_path = paths::tech_published_wp_path(group, info.id);
     if fs::read_link(&link_path).is_ok() {
         fs::remove_file(&link_path).unwrap();
     }
@@ -180,7 +180,7 @@ pub fn publish_public(info: ci::ProjectInfo, uuid: String) -> Result<(), Error> 
 pub fn delete_unpublished_workspace(id: i32, uuid: &str) -> Result<(), Error> {
     db::remove_workspace(id, &uuid).unwrap();
     let group = db::technique_type(id).unwrap();
-    fs::remove_dir_all(paths::tech_workspace_path(&group, id, &uuid)).unwrap();
+    fs::remove_dir_all(paths::tech_workspace_path(group, id, &uuid)).unwrap();
     fs::remove_dir_all(paths::public_page_path().join(&uuid)).unwrap();
     Ok(())
 }
@@ -203,7 +203,7 @@ pub fn trim_unpublished() {
     for group in vec![info::TechniqueType::DENOISER, info::TechniqueType::SAMPLER] {
         let to_delete = db::get_unpub_older_than(group, config.unpublished_days_limit).unwrap();
         for item in to_delete {
-            fs::remove_dir_all(paths::tech_workspace_path(&group, item.0, &item.1))
+            fs::remove_dir_all(paths::tech_workspace_path(group, item.0, &item.1))
                 .expect("failed to remove workspace");
             fs::remove_dir_all(paths::public_page_path().join(&item.1))
                 .expect("failed to remove private page");
@@ -233,7 +233,7 @@ pub fn init_missing_scenes_workspace(proj: &ci::ProjectInfo, uuid: &String) -> R
         &uuid
     );
     let group = db::technique_type(proj.id).unwrap();
-    match workspace::create_tmp_technique_workspace(&group, proj, &uuid) {
+    match workspace::create_tmp_technique_workspace(group, proj, &uuid) {
         Ok(has_scenes) => Ok(has_scenes),
         Err(_) => Err(Error::Unspecified),
     }
@@ -246,9 +246,9 @@ pub fn update_results(proj: ci::ProjectInfo, uuid: String) -> Result<(), Error> 
     workspace::save_technique_tmp_workspace(group, proj.id, &uuid, false, false);
 
     // update unpublished results page
-    let install_path = paths::tech_install_path(&group, proj.id, &uuid);
+    let install_path = paths::tech_install_path(group, proj.id, &uuid);
     let tech = info::TechniqueInfo::read(install_path.join("info.json"))?;
-    let src = paths::tech_results_path(&group, proj.id, &uuid);
+    let src = paths::tech_results_path(group, proj.id, &uuid);
     let dest = paths::public_page_path()
         .join(&uuid)
         .join("data")

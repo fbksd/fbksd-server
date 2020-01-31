@@ -5,7 +5,7 @@
 use crate::ci::ProjectInfo;
 use crate::error::Error;
 use crate::info;
-use crate::schema::{techniques, workspaces};
+use crate::schema::{message_tasks, normal_tasks, priority_tasks, techniques, workspaces};
 use crate::system_config::SystemConfig;
 
 use chrono::{Duration, NaiveDateTime, Utc};
@@ -48,6 +48,20 @@ impl Technique {
         } else {
             return info::TechniqueType::SAMPLER;
         }
+    }
+
+    fn get_normal_tasks(&self, conn: &SqliteConnection) -> Vec<NormalTask> {
+        let tasks = NormalTask::belonging_to(self)
+            .load::<NormalTask>(conn)
+            .unwrap();
+        return tasks;
+    }
+
+    fn get_priority_tasks(&self, conn: &SqliteConnection) -> Vec<PriorityTask> {
+        let tasks = PriorityTask::belonging_to(self)
+            .load::<PriorityTask>(conn)
+            .unwrap();
+        return tasks;
     }
 }
 
@@ -94,6 +108,293 @@ pub struct NewWorkspace<'a> {
     commit_sha: &'a str,
     docker_image: &'a str,
     status: i32,
+}
+
+#[derive(Debug)]
+pub enum TaskType {
+    Build,
+    RunBenchmark,
+    PublishResults,
+}
+
+pub trait Task {
+    fn get_type_i32(&self) -> i32;
+
+    fn get_type(&self) -> TaskType {
+        let i = self.get_type_i32();
+        if TaskType::Build as i32 == i {
+            return TaskType::Build;
+        } else if TaskType::PublishResults as i32 == i {
+            return TaskType::PublishResults;
+        } else {
+            return TaskType::RunBenchmark;
+        }
+    }
+}
+
+#[derive(Debug, Clone, Identifiable, Associations, Queryable)]
+#[belongs_to(Technique)]
+pub struct NormalTask {
+    id: i32,
+    technique_id: i32,
+    commit_sha: String,
+    docker_img: String,
+    task_type: i32,
+    task_data: Option<Vec<u8>>,
+}
+
+impl Task for NormalTask {
+    fn get_type_i32(&self) -> i32 {
+        return self.task_type;
+    }
+}
+
+#[derive(Insertable)]
+#[table_name = "normal_tasks"]
+pub struct NewNormalTask<'a> {
+    technique_id: i32,
+    commit_sha: &'a str,
+    docker_img: &'a str,
+    task_type: i32,
+    task_data: Option<&'a [u8]>,
+}
+
+#[derive(Debug, Clone, Identifiable, Associations, Queryable)]
+#[belongs_to(Technique)]
+struct PriorityTask {
+    id: i32,
+    technique_id: i32,
+    commit_sha: String,
+    docker_img: String,
+    task_type: i32,
+    task_data: Option<Vec<u8>>,
+}
+
+impl Task for PriorityTask {
+    fn get_type_i32(&self) -> i32 {
+        return self.task_type;
+    }
+}
+
+#[derive(Insertable)]
+#[table_name = "priority_tasks"]
+struct NewPriorityTask<'a> {
+    technique_id: i32,
+    commit_sha: &'a str,
+    docker_img: &'a str,
+    task_type: i32,
+    task_data: Option<&'a [u8]>,
+}
+
+#[derive(Debug, Clone, Identifiable, Queryable)]
+pub struct MessageTask {
+    id: i32,
+    pub to_address: String,
+    pub subject: String,
+    pub text: String,
+}
+
+#[derive(Insertable)]
+#[table_name = "message_tasks"]
+pub struct NewMessageTask<'a> {
+    to_address: &'a str,
+    subject: &'a str,
+    text: &'a str,
+}
+
+pub fn push_msg_task(to: &str, subject: &str, text: &str) -> Result<()> {
+    let task = NewMessageTask {
+        to_address: to,
+        subject: subject,
+        text: text,
+    };
+    let conn = establish_connection();
+    insert_into(message_tasks::table)
+        .values(&task)
+        .execute(&conn)?;
+    return Ok(());
+}
+
+pub fn read_next_message() -> Result<Option<MessageTask>> {
+    let conn = establish_connection();
+    match message_tasks::table
+        .order(message_tasks::dsl::id)
+        .limit(1)
+        .load::<MessageTask>(&conn)
+    {
+        Ok(tasks) => {
+            if tasks.len() == 0 {
+                return Ok(None);
+            } else {
+                // priority task found
+                let task = tasks[0].clone();
+                return Ok(Some(task));
+            }
+        }
+        Err(_) => {
+            return Err(Error::Unspecified);
+        }
+    }
+}
+
+pub fn pop_next_message() -> Result<()> {
+    let conn = establish_connection();
+    conn.transaction::<_, Error, _>(|| {
+        match message_tasks::table
+            .order(message_tasks::dsl::id)
+            .limit(1)
+            .load::<MessageTask>(&conn)
+        {
+            Ok(tasks) => {
+                if tasks.len() == 0 {
+                    return Err(Error::Unspecified);
+                } else {
+                    // delete the tasks row
+                    diesel::delete(&tasks[0]).execute(&conn)?;
+                    return Ok(());
+                }
+            }
+            Err(_) => {
+                return Err(Error::NotRegistered);
+            }
+        }
+    })
+}
+
+pub fn push_build_task(info: &ProjectInfo) -> Result<()> {
+    let id = info.id;
+    let conn = establish_connection();
+    conn.transaction::<_, Error, _>(
+        || match techniques::table.find(id).first::<Technique>(&conn) {
+            Ok(tech) => {
+                let tasks = tech.get_priority_tasks(&conn);
+                if tasks.len() > 0 {
+                    return Err(Error::Unspecified);
+                }
+
+                let task = NewPriorityTask {
+                    technique_id: id,
+                    commit_sha: &info.commit_sha,
+                    docker_img: &info.docker_img,
+                    task_type: TaskType::Build as i32,
+                    task_data: None,
+                };
+                insert_into(priority_tasks::table)
+                    .values(&task)
+                    .execute(&conn)?;
+                return Ok(());
+            }
+            Err(_) => {
+                return Err(Error::NotRegistered);
+            }
+        },
+    )
+}
+
+pub fn push_run_task(info: &ProjectInfo) -> Result<()> {
+    let id = info.id;
+    let conn = establish_connection();
+    conn.transaction::<_, Error, _>(
+        || match techniques::table.find(id).first::<Technique>(&conn) {
+            Ok(tech) => {
+                let tasks = tech.get_normal_tasks(&conn);
+                if tasks.len() > 0 {
+                    return Err(Error::Unspecified);
+                }
+
+                let task = NewNormalTask {
+                    technique_id: id,
+                    commit_sha: &info.commit_sha,
+                    docker_img: &info.docker_img,
+                    task_type: TaskType::Build as i32,
+                    task_data: None,
+                };
+                insert_into(normal_tasks::table)
+                    .values(&task)
+                    .execute(&conn)?;
+                return Ok(());
+            }
+            Err(_) => {
+                return Err(Error::NotRegistered);
+            }
+        },
+    )
+}
+
+pub fn pop_next_task() -> Result<Option<Box<dyn Task>>> {
+    let conn = establish_connection();
+    conn.transaction::<_, _, _>(|| {
+        // first try to get a priority task
+        match priority_tasks::table
+            .order(priority_tasks::dsl::id)
+            .limit(1)
+            .load::<PriorityTask>(&conn)
+        {
+            Ok(tasks) => {
+                if tasks.len() == 0 {
+                    // no priority task found, try a normal task
+                    match normal_tasks::table
+                        .order(normal_tasks::dsl::id)
+                        .limit(1)
+                        .load::<NormalTask>(&conn)
+                    {
+                        Ok(tasks) => {
+                            if tasks.len() == 0 {
+                                // no normal task found
+                                return Ok(None);
+                            } else {
+                                // normal task found
+                                let task = tasks[0].clone();
+                                let task: Box<dyn Task> = Box::new(task);
+                                return Ok(Some(task));
+                            }
+                        }
+                        Err(_) => {
+                            return Err(Error::Unspecified);
+                        }
+                    }
+                } else {
+                    // priority task found
+                    let task = tasks[0].clone();
+                    let task: Box<dyn Task> = Box::new(task);
+                    return Ok(Some(task));
+                }
+            }
+            Err(_) => {
+                return Err(Error::Unspecified);
+            }
+        }
+    })
+}
+
+pub fn push_publish_task(info: &ProjectInfo, uuid: &String) -> Result<()> {
+    let id = info.id;
+    let conn = establish_connection();
+    conn.transaction::<_, Error, _>(
+        || match techniques::table.find(id).first::<Technique>(&conn) {
+            Ok(tech) => {
+                let tasks = tech.get_normal_tasks(&conn);
+                if tasks.len() > 0 {
+                    return Err(Error::Unspecified);
+                }
+
+                let task = NewNormalTask {
+                    technique_id: id,
+                    commit_sha: &info.commit_sha,
+                    docker_img: &info.docker_img,
+                    task_type: TaskType::PublishResults as i32,
+                    task_data: Some(uuid.as_bytes()),
+                };
+                insert_into(normal_tasks::table)
+                    .values(&task)
+                    .execute(&conn)?;
+                return Ok(());
+            }
+            Err(_) => {
+                return Err(Error::NotRegistered);
+            }
+        },
+    )
 }
 
 /// Register a technique with the given id and name.
@@ -384,6 +685,7 @@ mod tests {
     fn test_register() {
         let info = ProjectInfo {
             id: 12,
+            user_email: Strimg::from("asdfsdf@asdfdf.com"),
             commit_sha: String::from("jhosidf"),
             docker_img: String::from("default"),
         };
@@ -394,11 +696,21 @@ mod tests {
         let uuid2 = add_workspace(&info).expect("");
         publish_workspace_private(&info, &uuid1).expect("");
         publish_workspace_private(&info, &uuid2).expect("");
-        // publish_workspace_public(&info, &uuid).expect("");
-        // unpublish_workspace(info.id.parse::<i32>().unwrap()).expect("");
+        publish_workspace_public(&info, &uuid1).expect("");
+        // unpublish_workspace(info.id).unwrap();
         // let published = get_published(info::TechniqueType::DENOISER).unwrap();
         // assert_eq!(published.len(), 0);
         // remove_workspace(info.id.parse::<i32>().unwrap(), &uuid).expect("");
+
+        let conn = establish_connection();
+        let techs = techniques::table
+            .find(info.id)
+            .get_results::<Technique>(&conn)
+            .unwrap();
+        let tech_workspace = Workspace::belonging_to(&techs)
+            .filter(workspaces::dsl::status.eq(WorkspaceStatus::Published as i32));
+        let sql = diesel::debug_query::<diesel::sqlite::Sqlite, _>(&tech_workspace).to_string();
+        println!("{}", sql);
     }
 
     #[test]

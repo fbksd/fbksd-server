@@ -21,7 +21,7 @@ use std::fs::File;
 use std::net::TcpListener;
 
 fn register(info: ProjectInfo, tech: TechniqueInfo) -> MsgResult {
-    match fbksd_core::register(info, tech) {
+    match fbksd_core::register(&info, &tech) {
         Ok(_) => Ok(String::from("Registered.")),
         Err(err) => Err(Error::from(err)),
     }

@@ -278,7 +278,7 @@ impl Workspace {
         wp
     }
 
-    pub fn load_technique(&mut self, group: &TechniqueType, proj: &ci::ProjectInfo, uuid: String) {
+    pub fn load_technique(&mut self, group: TechniqueType, proj: &ci::ProjectInfo, uuid: String) {
         let id: i32 = proj.id;
         let tech = Technique::read(id, paths::tech_workspace_path(group, id, &uuid)).unwrap();
         let techs = match group {
@@ -466,7 +466,7 @@ impl Workspace {
 /// Create a temporary workspace for a technique including missing scenes.
 /// Returns Ok(true) if any missing scene was included.
 pub fn create_tmp_technique_workspace(
-    group: &TechniqueType,
+    group: TechniqueType,
     proj: &ci::ProjectInfo,
     uuid: &str,
 ) -> WPResult<bool> {
@@ -559,7 +559,7 @@ pub fn create_tmp_workspace(include_published: bool) {
             //TODO: remove this database access.
             let published = db::get_published(group).unwrap();
             for p in published.iter() {
-                let base = paths::tech_workspace_path(&group, p.0, &p.1);
+                let base = paths::tech_workspace_path(group, p.0, &p.1);
                 // binaries
                 let src = base.join(paths::TECH_INSTALL_DIR).join("");
                 let dest = Path::new(group.as_str()).join(p.0.to_string());
@@ -572,7 +572,7 @@ pub fn create_tmp_workspace(include_published: bool) {
                 // results
                 let src = base.join("results/");
                 let tech = info::TechniqueInfo::read(
-                    paths::tech_install_path(&group, p.0, &p.1).join("info.json"),
+                    paths::tech_install_path(group, p.0, &p.1).join("info.json"),
                 )
                 .unwrap();
                 let dest = PathBuf::from("results/.current/")
@@ -617,7 +617,7 @@ pub fn save_technique_tmp_workspace(
         .join(group.as_str())
         .join(&tech.short_name)
         .join("");
-    let dest = paths::tech_results_path(&group, id, &uuid).join("");
+    let dest = paths::tech_results_path(group, id, &uuid).join("");
     if mv {
         let status = Command::new("mv").args(&[&src, &dest]).status();
         if status.is_err() || !status.unwrap().success() {
@@ -642,7 +642,7 @@ pub fn save_technique_tmp_workspace(
             .join(group.as_str())
             .join(id.to_string())
             .join("");
-        let dest = paths::tech_install_path(&group, id, &uuid).join("");
+        let dest = paths::tech_install_path(group, id, &uuid).join("");
         if mv {
             let status = Command::new("mv").args(&[&src, &dest]).status();
             if status.is_err() || !status.unwrap().success() {
@@ -722,9 +722,9 @@ pub fn export_images() {
     for group in vec![info::TechniqueType::DENOISER, info::TechniqueType::SAMPLER] {
         let published = db::get_published(group).unwrap();
         for p in published {
-            let src = paths::tech_results_path(&group, p.0, &p.1);
+            let src = paths::tech_results_path(group, p.0, &p.1);
             let tech = info::TechniqueInfo::read(
-                paths::tech_install_path(&group, p.0, &p.1).join("info.json"),
+                paths::tech_install_path(group, p.0, &p.1).join("info.json"),
             )
             .unwrap();
             let dest = paths::public_page_path()
@@ -852,12 +852,12 @@ pub fn update_scenes() {
 /// Unpublishes a technique, setting its workspace as "Finished".
 pub fn unpublish_technique(group: info::TechniqueType, id: i32, uuid: &str) -> WPResult<()> {
     // delete "published" link
-    if fs::remove_file(paths::tech_published_wp_path(&group, id)).is_err() {
+    if fs::remove_file(paths::tech_published_wp_path(group, id)).is_err() {
         return Err(Error::Unspecified);
     }
     // delete technique's results from the public page
     let tech = match info::TechniqueInfo::read(
-        paths::tech_install_path(&group, id, &uuid).join("info.json"),
+        paths::tech_install_path(group, id, &uuid).join("info.json"),
     ) {
         Ok(tech) => tech,
         _ => {

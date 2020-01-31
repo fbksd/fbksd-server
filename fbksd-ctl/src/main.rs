@@ -45,7 +45,7 @@ fn run_all() {
     for group in vec![TechniqueType::DENOISER, TechniqueType::SAMPLER] {
         let published = db::get_published(group).unwrap();
         for p in published {
-            let base = paths::tech_workspace_path(&group, p.0, &p.1);
+            let base = paths::tech_workspace_path(group, p.0, &p.1);
             let tech =
                 TechniqueInfo::read(base.join(paths::TECH_INSTALL_DIR).join("info.json")).unwrap();
             let src = PathBuf::from("results/.current")

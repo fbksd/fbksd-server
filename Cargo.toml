@@ -4,5 +4,8 @@ members = [
     "fbksd-core",
     "fbksd-ctl",
     "fbksd-server",
-    "fbksd-ci"
+    "fbksd-ci",
+    "fbksd-producer",
+    "fbksd-consumer",
+    "fbksd-mailer"
 ]

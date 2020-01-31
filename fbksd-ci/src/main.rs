@@ -24,23 +24,6 @@ use std::os::unix::fs as unixfs;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-struct Paths {
-    tmp_workspace: PathBuf,
-    scenes: PathBuf,
-    renderers: PathBuf,
-}
-
-impl Paths {
-    fn load() -> Paths {
-        let root = paths::data_root();
-        Paths {
-            tmp_workspace: root.join("tmp/workspace"),
-            scenes: root.join("scenes"),
-            renderers: root.join("renderers"),
-        }
-    }
-}
-
 fn register_current_technique() {
     let proj = ProjectInfo::load().unwrap();
     let tech = TechniqueInfo::read(PathBuf::from("info.json")).unwrap();
@@ -100,10 +83,8 @@ fn run() {
     let client = Client::new();
     client.can_run(proj.clone());
 
-    let paths = Paths::load();
-
     // create temporary workspace
-    let tmp_workspace = paths.tmp_workspace;
+    let tmp_workspace = paths::tmp_workspace_path();
     if tmp_workspace.is_dir() {
         fs::remove_dir_all(&tmp_workspace).expect("Failed to clean temporary workspace dir");
     }
@@ -113,9 +94,14 @@ fn run() {
     // init and config new workspace
     {
         let _cd = CD::new("workspace");
-        unixfs::symlink(paths.renderers, "renderers").expect("Failed to crate results link");
+        unixfs::symlink(paths::renderers_path(), "renderers")
+            .expect("Failed to crate results link");
         let status = Command::new("fbksd")
-            .args(&["init", "--scenes-dir", paths.scenes.to_str().unwrap()])
+            .args(&[
+                "init",
+                "--scenes-dir",
+                paths::scenes_path().to_str().unwrap(),
+            ])
             .stdout(Stdio::null())
             .status()
             .expect("Failed to execute command");
@@ -174,13 +160,12 @@ fn publish() {
     const FBKSD_PUBLISH: &str = "FBKSD_PUBLISH";
     let uuid = env::var(FBKSD_PUBLISH).expect(&format!("Evn var {} not defined", FBKSD_PUBLISH));
     let client = Client::new();
-    let paths = Paths::load();
     // run benchmark for missing scenes (if any)
     if client
         .init_missing_scenes_workspace(proj.clone(), &uuid)
         .is_some()
     {
-        cd!(paths.tmp_workspace, {
+        cd!(paths::tmp_workspace_path(), {
             // fbksd run
             let status = Command::new("fbksd")
                 .arg("run")
