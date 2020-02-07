@@ -10,7 +10,8 @@ use std::fs;
 
 #[derive(Debug)]
 pub enum CIError {
-    MissingEnvVar,
+    MissingEnvVar(String),
+    InvalidID,
     CIConfigNotFound,
     CIConfigMissingInclude,
     CIConfigImageNotFound,
@@ -20,8 +21,9 @@ pub enum CIError {
 impl fmt::Display for CIError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use CIError::*;
-        match *self {
-            MissingEnvVar => "missing CI environment variable".fmt(f),
+        match &*self {
+            MissingEnvVar(var) => write!(f, "missing CI environment variable: {}", var),
+            InvalidID => "invalid project ID".fmt(f),
             CIConfigNotFound => "\".gitlab-ci.yml\" file not found".fmt(f),
             CIConfigMissingInclude => {
                 "\".gitlab-ci.yml\" file missing correct \"include\" statement".fmt(f)
@@ -47,6 +49,7 @@ struct CIProjInclude {
     docker_img: String,
 }
 
+/// `.gitlab-ci.yml` file's content.
 #[derive(Debug, Deserialize, PartialEq, Clone)]
 #[serde(deny_unknown_fields)]
 struct CIConfig {
@@ -102,6 +105,8 @@ pub struct ProjectInfo {
     pub user_email: String,
     /// From CIConfig::docker_img().
     pub docker_img: String,
+    /// From FBKSD_TOKEN.
+    pub token: String,
 }
 
 impl ProjectInfo {
@@ -109,31 +114,44 @@ impl ProjectInfo {
         const CI_PROJECT_ID: &str = "CI_PROJECT_ID";
         let id = env::var(CI_PROJECT_ID);
         if id.is_err() {
-            return Err(CIError::CIConfigNotFound);
+            return Err(CIError::MissingEnvVar(String::from(CI_PROJECT_ID)));
         }
         // TODO: remove the unwraps.
-        let id = id.unwrap().parse::<i32>().unwrap();
+        let id = id.unwrap().parse::<i32>();
+        if id.is_err() {
+            return Err(CIError::InvalidID);
+        }
+        let id = id.unwrap();
 
         const CI_COMMIT_SHORT_SHA: &str = "CI_COMMIT_SHORT_SHA";
         let commit_sha = env::var(CI_COMMIT_SHORT_SHA);
         if commit_sha.is_err() {
-            return Err(CIError::CIConfigNotFound);
+            return Err(CIError::MissingEnvVar(String::from(CI_COMMIT_SHORT_SHA)));
         }
         let commit_sha = commit_sha.unwrap();
 
         const GITLAB_USER_EMAIL: &str = "GITLAB_USER_EMAIL";
         let user_email = env::var(GITLAB_USER_EMAIL);
         if user_email.is_err() {
-            return Err(CIError::CIConfigNotFound);
+            return Err(CIError::MissingEnvVar(String::from(GITLAB_USER_EMAIL)));
         }
         let user_email = user_email.unwrap();
 
+        const FBKSD_TOKEN: &str = "FBKSD_TOKEN";
+        let token = env::var(FBKSD_TOKEN);
+        if token.is_err() {
+            return Err(CIError::MissingEnvVar(String::from(FBKSD_TOKEN)));
+        }
+        let token = token.unwrap();
+
+        // loads and validates the `.gitlab-ci.yml` file.
         let ci_config = CIConfig::load()?;
         Ok(ProjectInfo {
             id,
             commit_sha,
             user_email,
             docker_img: String::from(ci_config.docker_img()),
+            token,
         })
     }
 }

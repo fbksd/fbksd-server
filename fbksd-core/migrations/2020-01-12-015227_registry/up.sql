@@ -1,5 +1,6 @@
 CREATE TABLE techniques (
     id INTEGER PRIMARY KEY NOT NULL,
+    fbksd_token VARCHAR(36) NOT NULL,
     technique_type INTEGER NOT NULL,      -- 0: denoiser; 1: sampler
     short_name VARCHAR UNIQUE NOT NULL,   -- Acronym of the technique
     full_name VARCHAR NOT NULL,

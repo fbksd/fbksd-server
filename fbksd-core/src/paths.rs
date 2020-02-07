@@ -143,7 +143,7 @@ pub fn tech_data_path(group: TechniqueType, id: i32) -> PathBuf {
 }
 
 pub fn tech_project_src_path(group: TechniqueType, id: i32) -> PathBuf {
-    return tech_data_path(group, id).join("src");
+    return tech_data_path(group, id).join("project");
 }
 
 pub fn tech_workspace_path(group: TechniqueType, id: i32, uuid: &str) -> PathBuf {

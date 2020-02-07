@@ -15,8 +15,9 @@ use wp::Workspace;
 
 use clap::{load_yaml, App};
 use std::fs::File;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitStatus};
 
 fn status() {
     if !Path::new(paths::LOCK_FILE).exists() {
@@ -29,8 +30,29 @@ fn status() {
     }
 }
 
+fn docker_run(image: &str, command: &str, command_args: &[&str]) -> io::Result<ExitStatus> {
+    docker::Docker::new(image)
+        .mounts(&[
+            (paths::LOCK_FILE, paths::LOCK_FILE),
+            (
+                paths::tmp_workspace_path().to_str().unwrap(),
+                "/mnt/fbksd-data/tmp/workspace",
+            ),
+        ])
+        .mounts_ro(&[
+            (
+                paths::renderers_path().to_str().unwrap(),
+                "/mnt/fbksd-data/tmp/workspace/renderers",
+            ),
+            (
+                paths::scenes_path().to_str().unwrap(),
+                "/mnt/fbksd-data/tmp/workspace/scenes",
+            ),
+        ])
+        .run(command, command_args)
+}
+
 fn run_all() {
-    //TODO: techniques can require different docker images.
     let _lock = FLock::new();
     println!("building temporary workspace...");
     wp::create_tmp_workspace(true);
@@ -38,8 +60,9 @@ fn run_all() {
 
     let tmp_workspace = paths::tmp_workspace_path();
     let _cd = CD::new(&tmp_workspace);
-    docker::run("fbksd", &["run"]).unwrap();
-    docker::run("fbksd", &["results", "compute"]).unwrap();
+    //TODO: run in the correct image for each technique
+    docker_run("fbksd-ci", "fbksd", &["run"]).unwrap();
+    docker_run("fbksd-ci", "fbksd", &["results", "compute"]).unwrap();
 
     println!("saving results...");
     for group in vec![TechniqueType::DENOISER, TechniqueType::SAMPLER] {

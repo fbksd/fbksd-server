@@ -1,11 +1,9 @@
-name: fbksd-ctl
+name: fbksd-ci
 version: "1.0"
 author: Jonas Deyson <kbknapp@gmail.com>
-about: Server fkbsd task manager.
+about: FBKSD CI bridge process.
 
 subcommands:
-    - validate-ci:
-        about: validate the CI yml config file
     - install:
         about: build and install
     - run:

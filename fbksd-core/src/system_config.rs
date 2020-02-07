@@ -8,6 +8,23 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 
+/*
+{
+    "max_num_workspaces": 3,
+    "unpublished_days_limit": 1,
+    "spps": [2, 4, 8, 16, 32],
+    "configs": {
+        "config": "fbksd-ci:latest",
+        "default": "fbksd-ci:latest"
+    },
+    "mailer_smtp_domain": "smtp.gmail.com",
+    "mailer_email_user": "fbksd.gitlab@gmail.com",
+    "mailer_email_password": "************",
+    "mailer_polling_rate": 20,
+    "mailer_timeout": 120
+}
+*/
+
 /// Server system configurations.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SystemConfig {
